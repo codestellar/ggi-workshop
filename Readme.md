@@ -7,3 +7,5 @@
 ````
 git clone https://github.com/codestellar/ggi-workshop.git
 ````
+4. download ollama
+5. thunderclient

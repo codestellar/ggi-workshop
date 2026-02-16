@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FastAPI Items UI (Vanilla JS + Tailwind)</title>
+    <!-- Tailwind via CDN (good for workshop/demo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body class="min-h-screen bg-slate-50 text-slate-900">
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-10 border-b bg-white/80 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+        <div class="flex items-center gap-3">
+          <div class="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 font-semibold text-white">UI</div>
+          <div>
+            <div class="text-sm font-semibold">FastAPI Items UI</div>
+            <div class="text-xs text-slate-500">Vanilla JS + Tailwind • CRUD</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input
+            id="apiBase"
+            class="w-[260px] rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+            placeholder="API Base URL (e.g. http://localhost:8000)"
+            value="http://localhost:8000"
+          />
+          <button
+            id="refreshBtn"
+            class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Toast -->
+    <div id="toast" class="pointer-events-none fixed right-4 top-16 hidden">
+      <div class="rounded-xl border bg-white px-4 py-2 text-sm shadow">
+        <span id="toastText"></span>
+      </div>
+    </div>
+
+    <main class="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-5">
+      <!-- Left: Create/Edit -->
+      <section class="lg:col-span-2">
+        <div class="rounded-2xl border bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h2 id="formTitle" class="text-base font-semibold">Create Item</h2>
+            <button
+              id="cancelEditBtn"
+              class="hidden rounded-xl border px-3 py-1.5 text-sm hover:bg-slate-50"
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <form id="itemForm" class="mt-4 space-y-3">
+            <div id="idFieldWrap">
+              <label class="mb-1 block text-xs font-medium text-slate-600">ID (optional)</label>
+              <input
+                id="idInput"
+                class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                placeholder="Leave blank to let backend assign"
+              />
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-slate-600">Name *</label>
+              <input
+                id="nameInput"
+                class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                placeholder="e.g. Notebook"
+                required
+              />
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-slate-600">Description</label>
+              <textarea
+                id="descInput"
+                class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                placeholder="Optional description"
+                rows="3"
+              ></textarea>
+              <div class="mt-1 text-[11px] text-slate-500">
+                Leave empty to send <span class="font-mono">null</span>.
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-medium text-slate-600">Price *</label>
+              <input
+                id="priceInput"
+                class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+                placeholder="e.g. 19.99"
+                required
+              />
+            </div>
+
+            <button
+              id="submitBtn"
+              type="submit"
+              class="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Create
+            </button>
+          </form>
+        </div>
+
+        <!-- Lookup -->
+        <div class="mt-6 rounded-2xl border bg-white p-4 shadow-sm">
+          <h3 class="text-base font-semibold">Lookup Item by ID</h3>
+          <div class="mt-3 flex gap-2">
+            <input
+              id="lookupInput"
+              class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+              placeholder="Enter item_id"
+            />
+            <button
+              id="lookupBtn"
+              type="button"
+              class="rounded-xl border px-3 py-2 text-sm font-medium hover:bg-slate-50"
+            >
+              Lookup
+            </button>
+          </div>
+
+          <div id="lookupResult" class="mt-3 hidden rounded-xl border bg-slate-50 p-3 text-sm"></div>
+        </div>
+
+        <!-- Errors -->
+        <div id="errorBox" class="mt-6 hidden rounded-2xl border border-red-200 bg-red-50 p-4">
+          <div class="text-sm font-semibold text-red-800" id="errorTitle">Error</div>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-800" id="errorDetails"></ul>
+        </div>
+      </section>
+
+      <!-- Right: Items Table -->
+      <section class="lg:col-span-3">
+        <div class="rounded-2xl border bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-semibold">Items</h2>
+            <div class="text-xs text-slate-500" id="listMeta">—</div>
+          </div>
+
+          <div class="mt-3 overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="border-b text-xs text-slate-500">
+                <tr>
+                  <th class="py-2 pr-2">ID</th>
+                  <th class="py-2 pr-2">Name</th>
+                  <th class="py-2 pr-2">Description</th>
+                  <th class="py-2 pr-2">Price</th>
+                  <th class="py-2 pr-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="itemsTbody" class="divide-y"></tbody>
+            </table>
+          </div>
+
+          <div id="emptyState" class="mt-4 hidden rounded-xl border bg-slate-50 p-4 text-sm text-slate-600">
+            No items yet. Create your first item on the left.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // ----------------------------
+      // State
+      // ----------------------------
+      let mode = "create"; // create | edit
+      let selectedId = null;
+
+      // ----------------------------
+      // Helpers
+      // ----------------------------
+      const $ = (id) => document.getElementById(id);
+
+      function apiBase() {
+        return $("apiBase").value.replace(/\/+$/, "");
+      }
+
+      function showToast(msg) {
+        $("toastText").textContent = msg;
+        $("toast").classList.remove("hidden");
+        setTimeout(() => $("toast").classList.add("hidden"), 2500);
+      }
+
+      function clearErrors() {
+        $("errorBox").classList.add("hidden");
+        $("errorTitle").textContent = "";
+        $("errorDetails").innerHTML = "";
+      }
+
+      function showError(title, details = []) {
+        $("errorTitle").textContent = title;
+        $("errorDetails").innerHTML = "";
+        details.forEach((d) => {
+          const li = document.createElement("li");
+          li.textContent = d;
+          $("errorDetails").appendChild(li);
+        });
+        $("errorBox").classList.remove("hidden");
+      }
+
+      function toNumberOrNull(v) {
+        if (v === "" || v === null || v === undefined) return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      }
+
+      function money(n) {
+        if (typeof n !== "number") return "-";
+        return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n);
+      }
+
+      async function request(path, options = {}) {
+        const res = await fetch(`${apiBase()}${path}`, {
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+
+        const ct = res.headers.get("content-type") || "";
+        const isJson = ct.includes("application/json");
+        const body = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
+
+        if (!res.ok) {
+          const err = { status: res.status, statusText: res.statusText, body };
+          throw err;
+        }
+        return body;
+      }
+
+      function showFastApiError(err) {
+        if (err?.status === 422 && err?.body?.detail) {
+          const lines = err.body.detail.map((d, i) => {
+            const loc = Array.isArray(d.loc) ? d.loc.join(" → ") : String(d.loc || "");
+            return `${i + 1}. ${loc}: ${d.msg} (${d.type})`;
+          });
+          showError("Validation Error (422)", lines);
+          return;
+        }
+
+        const bodyText =
+          typeof err?.body === "string" ? err.body : err?.body ? JSON.stringify(err.body) : "Unknown error";
+        showError(`Request Failed (${err?.status || "?"})`, [err?.statusText || "Error", bodyText]);
+      }
+
+      // ----------------------------
+      // UI mode handling
+      // ----------------------------
+      function setModeCreate() {
+        mode = "create";
+        selectedId = null;
+
+        $("formTitle").textContent = "Create Item";
+        $("submitBtn").textContent = "Create";
+        $("cancelEditBtn").classList.add("hidden");
+        $("idFieldWrap").classList.remove("hidden");
+
+        $("idInput").value = "";
+        $("nameInput").value = "";
+        $("descInput").value = "";
+        $("priceInput").value = "";
+      }
+
+      function setModeEdit(item) {
+        mode = "edit";
+        selectedId = item.id;
+
+        $("formTitle").textContent = `Edit Item #${item.id}`;
+        $("submitBtn").textContent = "Update";
+        $("cancelEditBtn").classList.remove("hidden");
+        $("idFieldWrap").classList.add("hidden"); // id is path param for update; keep UI simple
+
+        $("idInput").value = item.id ?? "";
+        $("nameInput").value = item.name ?? "";
+        $("descInput").value = item.description ?? "";
+        $("priceInput").value = item.price ?? "";
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      // ----------------------------
+      // Render list
+      // ----------------------------
+      function renderItems(items) {
+        const tbody = $("itemsTbody");
+        tbody.innerHTML = "";
+
+        $("listMeta").textContent = `${items.length} item(s)`;
+        $("emptyState").classList.toggle("hidden", items.length !== 0);
+
+        items.forEach((item) => {
+          const tr = document.createElement("tr");
+
+          const tdId = document.createElement("td");
+          tdId.className = "py-2 pr-2 font-mono text-xs text-slate-700";
+          tdId.textContent = item.id ?? "-";
+
+          const tdName = document.createElement("td");
+          tdName.className = "py-2 pr-2 font-medium";
+          tdName.textContent = item.name ?? "";
+
+          const tdDesc = document.createElement("td");
+          tdDesc.className = "py-2 pr-2 text-slate-600";
+          tdDesc.textContent = item.description ?? "—";
+
+          const tdPrice = document.createElement("td");
+          tdPrice.className = "py-2 pr-2";
+          tdPrice.textContent = typeof item.price === "number" ? money(item.price) : String(item.price ?? "-");
+
+          const tdActions = document.createElement("td");
+          tdActions.className = "py-2 pr-2";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "mr-2 rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-slate-50";
+          editBtn.textContent = "Edit";
+          editBtn.addEventListener("click", () => setModeEdit(item));
+
+          const delBtn = document.createElement("button");
+          delBtn.className = "rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100";
+          delBtn.textContent = "Delete";
+          delBtn.addEventListener("click", () => deleteItem(item.id));
+
+          tdActions.appendChild(editBtn);
+          tdActions.appendChild(delBtn);
+
+          tr.appendChild(tdId);
+          tr.appendChild(tdName);
+          tr.appendChild(tdDesc);
+          tr.appendChild(tdPrice);
+          tr.appendChild(tdActions);
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      // ----------------------------
+      // API actions
+      // ----------------------------
+      async function refreshList() {
+        clearErrors();
+        try {
+          const data = await request("/items", { method: "GET" });
+          renderItems(Array.isArray(data) ? data : []);
+        } catch (err) {
+          showFastApiError(err);
+        }
+      }
+
+      async function createItem(payload) {
+        clearErrors();
+        try {
+          await request("/items", { method: "POST", body: JSON.stringify(payload) });
+          showToast("Item created");
+          setModeCreate();
+          await refreshList();
+        } catch (err) {
+          showFastApiError(err);
+        }
+      }
+
+      async function updateItem(id, payload) {
+        clearErrors();
+        try {
+          await request(`/items/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+          showToast("Item updated");
+          setModeCreate();
+          await refreshList();
+        } catch (err) {
+          showFastApiError(err);
+        }
+      }
+
+      async function deleteItem(id) {
+        clearErrors();
+        if (id === null || id === undefined) return;
+        const ok = confirm(`Delete item #${id}?`);
+        if (!ok) return;
+
+        try {
+          await request(`/items/${id}`, { method: "DELETE" });
+          showToast("Item deleted");
+          if (selectedId === id) setModeCreate();
+          await refreshList();
+        } catch (err) {
+          showFastApiError(err);
+        }
+      }
+
+      async function lookupItem() {
+        clearErrors();
+        $("lookupResult").classList.add("hidden");
+        $("lookupResult").textContent = "";
+
+        const id = toNumberOrNull($("lookupInput").value);
+        if (id === null) {
+          showError("Lookup Error", ["Please enter a valid numeric item_id."]);
+          return;
+        }
+
+        try {
+          const item = await request(`/items/${id}`, { method: "GET" });
+          $("lookupResult").textContent = JSON.stringify(item, null, 2);
+          $("lookupResult").classList.remove("hidden");
+          showToast("Item loaded");
+        } catch (err) {
+          showFastApiError(err);
+        }
+      }
+
+      // ----------------------------
+      // Form submit
+      // ----------------------------
+      $("itemForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        clearErrors();
+
+        const name = String($("nameInput").value || "").trim();
+        const descRaw = $("descInput").value;
+        const price = toNumberOrNull($("priceInput").value);
+
+        const payload = {
+          name,
+          price,
+          description: descRaw === "" ? null : String(descRaw),
+        };
+
+        if (mode === "create") {
+          const idVal = toNumberOrNull($("idInput").value);
+          if (idVal !== null) payload.id = idVal;
+          await createItem(payload);
+        } else {
+          if (selectedId === null) {
+            showError("Edit Error", ["Missing item id for update."]);
+            return;
+          }
+          // include id for consistency (schema allows id null/integer)
+          payload.id = selectedId;
+          await updateItem(selectedId, payload);
+        }
+      });
+
+      // ----------------------------
+      // Buttons
+      // ----------------------------
+      $("refreshBtn").addEventListener("click", refreshList);
+      $("lookupBtn").addEventListener("click", lookupItem);
+      $("cancelEditBtn").addEventListener("click", setModeCreate);
+
+      // Initial load
+      setModeCreate();
+      refreshList();
+    </script>
+  </body>
+</html>
